@@ -4,6 +4,7 @@ smart filter for PCAP files, for Telecom purposes.
 to compile:
 gcc pcap.c cond.c pcap_read.c -o pcap_read
 
+<pre>
 Version 0.98.4
 pcap_scan  -o <outfile> -i <infile> [-i] <infile> .. -cX <value> [-cX <value>]...[-cX <value>]  
 Mandatory:
@@ -29,3 +30,4 @@ learn mode (default is -l2)
  -l1 				expand condition list during scan only with tid, SessionID, CallID
  -l2 				expand condition list during scan with tid, SessionID, CallID, IMSI, MSISDN called and calling
  -D <debug_key>
+</pre>
