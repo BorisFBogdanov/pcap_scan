@@ -6,7 +6,7 @@
 // todo: more boundary check in packets size
 // todo: statitics
 
-#define PCAP_SCAN_VERSION 0.98.4
+#define PCAP_SCAN_VERSION 0.98.5a
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -39,7 +39,7 @@ int stop, pkt_counter;
 unsigned int tid, ptid[2];
 struct timeval time_stop, time_start, time_diff;
 const char *help_banner = 
-"Version 0.98.4\npcap_scan  -o <outfile> -i <infile> [-i] <infile> .. -cX <value> [-cX <value>]...[-cX <value>]  \nMandatory:\n -o <outfile>			PCAP file with matched packets\n -i <infile> [<infile>]...	one or more PCAP files to read. Gzip is supported. Note, bash automatically resolve mask to list.\nConditions: (if no conditions specified, take ALL packets with SIP, DIAMETER, MAP, CAP)\n -ci <imsi>\n -cm <msisdn>\n -cg <global title>\n -ct <tid>			(example: a1B2c3D4)\n -tp <tid1>:<tid2>\n -cc <SIP Call-ID>\n -cd <DIAMETER Session-Id>\n -cf <input file with conditions>\nOptions\n -v1  				don't skip VLAN packets\n -r <output file with conditions>\n -a1 				append outfile (if exist) (when -cf specified, -a1 assumed as default)\n -a0 				overwrite outfile\n -w 				scan input files two times (useful for files from STP pair, for example)\nlearn mode (default is -l2)\n -l0 				don't expand condition list during scan\n -l1 				expand condition list during scan only with tid, SessionID, CallID\n -l2 				expand condition list during scan with tid, SessionID, CallID, IMSI, MSISDN called and calling\n -D <debug_key>\n";
+"Version 0.98.5a\npcap_scan  -o <outfile> -i <infile> [-i] <infile> .. -cX <value> [-cX <value>]...[-cX <value>]  \nMandatory:\n -o <outfile>			PCAP file with matched packets\n -i <infile> [<infile>]...	one or more PCAP files to read. Gzip is supported. Note, bash automatically resolve mask to list.\nConditions: (if no conditions specified, take ALL packets with SIP, DIAMETER, MAP, CAP)\n -ci <imsi>\n -cm <msisdn>\n -cg <global title>\n -ct <tid>			(example: a1B2c3D4)\n -tp <tid1>:<tid2>\n -cc <SIP Call-ID>\n -cd <DIAMETER Session-Id>\n -cf <input file with conditions>\nOptions\n -v1  				don't skip VLAN packets\n -r <output file with conditions>\n -a1 				append outfile (if exist) (when -cf specified, -a1 assumed as default)\n -a0 				overwrite outfile\n -w 				scan input files two times (useful for files from STP pair, for example)\nlearn mode (default is -l2)\n -l0 				don't expand condition list during scan\n -l1 				expand condition list during scan only with tid, SessionID, CallID\n -l2 				expand condition list during scan with tid, SessionID, CallID, IMSI, MSISDN called and calling\n -D <debug_key>\n";
 
 gettimeofday(&time_start, NULL);
 
@@ -137,7 +137,7 @@ done_ConditionsList(Config.Conditions);
 gettimeofday(&time_stop, NULL);
 diff = (time_stop.tv_sec - time_start.tv_sec)*1000000 + (time_stop.tv_usec - time_start.tv_usec);
 
-printf("\nTotal packets:%u time:%u ms, rate:%u pkt/sec", pkt_counter, diff/1000, 1000*pkt_counter/diff );
+printf("\nTotal packets:%u time:%u ms, rate:%u Kpkt/sec, written:%u packets.", pkt_counter, diff/1000, 1000*pkt_counter/diff, packets_written);
 
 } // main
 

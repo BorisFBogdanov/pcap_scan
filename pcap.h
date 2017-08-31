@@ -1,3 +1,4 @@
+#include <stdio.h>
 
 #define PCAP_MAGIC (0xA1B2C3D4)
 #define GZIP_MAGIC (0x8B1F)

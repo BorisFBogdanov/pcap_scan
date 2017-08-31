@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-
+#include <errno.h>
 #include "gsm.h"
 #include "pcap.h"
 
@@ -111,8 +111,8 @@ if ((Self->pcap_header.magic & 0xFFFF) == GZIP_MAGIC ) {
 				Self->gzipped = 1;
 				fclose(Self->filehandler);
 				sprintf(gzfilename, "gzip -dc %s", Self->filename);
-				Self->filehandler = popen(gzfilename, "rb");
-				if (!Self->filehandler) { printf("\n cannot open GZ %s!", gzfilename); pcap_free(Self); return(NULL);}
+				Self->filehandler = popen(gzfilename, "r");
+				if (!Self->filehandler) { printf("\n cannot open GZIP %s! %s", gzfilename, strerror(errno)); pcap_free(Self); return(NULL);}
 			        fread(&Self->pcap_header, 6, sizeof(int), Self->filehandler);
 				}
 if (Self->pcap_header.magic != PCAP_MAGIC) { printf("\n%s isn`t pcap file!", Self->filename); pcap_free(Self); return(NULL);};
@@ -627,15 +627,16 @@ unsigned char asn_tag, opcode;
 int ptr, asn_length;
 ptr=0;
 pkt->protocol = pktCAP;
+if ((PCAP_DEBUG & pcap_dbg_cap) && (PCAP_DEBUG & pcap_dbg_bytes) ) prbyte(buf, 20);
 while (ptr < cap_length){
 	asn_tag = buf[ptr];
 	if (!asn_tag) return;
 	asn_length = get_d_asn(buf+ptr+1, &ptr);
-	opcode = buf[ptr+6];
+	opcode = buf[ptr+8];
 	pkt->Fields.CAP.OpCode = opcode;
 	if (PCAP_DEBUG & pcap_dbg_cap)  printf("\n CAP OPCODE %u",opcode);
 	if (PCAP_DEBUG & pcap_dbg_cap)  printf("\n CAP  asn_tag: %X  length:%X - op=%u", asn_tag, asn_length, opcode);
-	if ((opcode == CAP_IDP) || (opcode == CAP_Connect)){ process_camel_arg(buf+ptr+7, opcode, pkt);}
+	if ((opcode == CAP_IDP) || (opcode == CAP_Connect)){ process_camel_arg(buf+ptr+9, opcode, pkt);}
 	ptr += asn_length+1;
 	}
 }
