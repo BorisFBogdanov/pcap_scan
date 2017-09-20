@@ -2,7 +2,7 @@
 #define INITIAL_LIST_SIZE   20000
 #define INCREMENT_LIST_SIZE  4000
 
-#define CONDFILE_LINE_BUFFER 1024
+#define CONDFILE_LINE_BUFFER 16096
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 typedef struct Condition Condition;
 struct  Condition {char type; unsigned int t1; unsigned int t2; short length; char cvalue[1];};

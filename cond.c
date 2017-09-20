@@ -35,12 +35,13 @@ void *value;
 value = Value;
 if (PCAP_DEBUG & pcap_dbg_cond) {printf("\nadd U condition %c\n", Type); printCondition(Type, value);}
 if (PCAP_DEBUG & pcap_dbg_cond) print_ConditionList(Self, stdout);
-if (( Type == 't' ) && ( *(int*)(value) == 0) ) return; // don't use empty TID;
-if (( Type != 't' && Type != 'p') && ( strlen(value) == 0) ) {if (PCAP_DEBUG & pcap_dbg_cond) printf("\nskip empty line"); return;}; // don't use empty fields;
-if  ( Type != 't' && Type != 'p') value = normal((char*)(value)); // skip % # prefix 
+if (( Type == 't' || Type == 's' || Type == 'x' ) && ( *(int*)(value) == 0) ) return; // don't use empty TID;
+if (( Type != 't' && Type != 's' && Type != 'x' && Type != 'p') && ( strlen(value) == 0) ) {if (PCAP_DEBUG & pcap_dbg_cond) printf("\nskip empty line"); return;}; // don't use empty fields;
+if  ( Type != 't' && Type != 's' && Type != 'x' && Type != 'p') value = normal((char*)(value)); // skip % # prefix 
 for(i = 0, cond = (Condition*)Self->buffer; i < Self->qty; cond = (Condition*)((char*)cond + cond->length), i++){  
 	if (cond->type == Type) switch(Type) {
-		case 't': if (PCAP_DEBUG & pcap_dbg_cond) printf(" comparing %x %x\n", *(unsigned int*)(value), cond->t1);
+		case 't': case 's': case 'x':
+			  if (PCAP_DEBUG & pcap_dbg_cond) printf(" comparing %x %x\n", *(unsigned int*)(value), cond->t1);
 			  if  (*(unsigned int*)(value) == cond->t1) return; break;
 		case 'p': 
 			  p1 = *    (unsigned int*)(value);
@@ -64,7 +65,7 @@ Condition * C_ptr;
 
 if (!Type) return;
 switch(Type){
-	case 't': case 'p': vl = 1; break;
+	case 't': case 'p': case 's': case 'x': vl = 1; break;
   	 default: vl = strlen(Value)+1;
 }
 chunk_size = sizeof(Condition)+vl;
@@ -79,7 +80,8 @@ C_ptr->type = Type;
 C_ptr->length = chunk_size;
 if (PCAP_DEBUG & (pcap_dbg_cond | pcap_dbg_bytes)) {printf("\nC_ptr: "); prbyte(C_ptr, 16);}
 switch(Type){
-	case 't' : C_ptr->t1 = *(unsigned int*)Value; 
+	case 't' : case 's': case 'x':
+		   C_ptr->t1 = *(unsigned int*)Value; 
 		   if (PCAP_DEBUG & pcap_dbg_cond)  printf("\ntid added %x\n", C_ptr->t1);
 		   break;
 	case 'p' : C_ptr->t1 = *(unsigned int*)Value; C_ptr->t2 = *((unsigned int*)Value + 1);  
@@ -100,7 +102,9 @@ if (PCAP_DEBUG & pcap_dbg_cond) printf("\ncond list, qty=%u size=%u Listptr=%x",
 for(i = 0, ptr = (Condition*)Self->buffer; i < Self->qty; ptr = (Condition*)((char*)ptr + ptr->length), i++) { 
 		switch(ptr->type){
 			case   0: break;
-			case 't': fprintf(file, "\n%c %08X", ptr->type, ptr->t1); break;
+			case 't': 
+			case 'x': 
+			case 's': fprintf(file, "\n%c %08X", ptr->type, ptr->t1); break;
 			case 'p': fprintf(file, "\n%c %08X:%08X", ptr->type, ptr->t1, ptr->t2); break;
 		  	 default: fprintf(file, "\n%c %s", ptr->type, ptr->cvalue); break;
 			}
@@ -110,7 +114,9 @@ for(i = 0, ptr = (Condition*)Self->buffer; i < Self->qty; ptr = (Condition*)((ch
 void printCondition(int type, void * value){
 	switch(type){
 		case   0: break;
-		case 't': printf("\n%c %08X",type, *(unsigned int*)value); break;
+		case 't': 
+		case 'x': 
+		case 's': printf("\n%c %08X", type, *(unsigned int*)value); break;
 		case 'p': printf("\n%c %08X:%08X", type, *(unsigned int*)value, *(1+(unsigned int*)value)); break;
 	  	 default: printf("\n%c [%s]",type, (char*)value); break;
 			}
@@ -125,8 +131,9 @@ while( !feof(text) ){
 	if (line[strlen(line)-1] == 0x0A) line[strlen(line)-1] = 0; // CR/LF workaround
 
 	switch (type){
-		case 't': ptid[0] = strtoul(&line[2], NULL, 16);
- 			  add_U_Condition(Self, 't', ptid); 
+		case 't': case 's': case 'x':
+			  ptid[0] = strtoul(&line[2], NULL, 16);
+ 			  add_U_Condition(Self, type, ptid); 
    			  break;
 		case 'p': ptid[0] = strtoul(&line[2], NULL, 16);
 			  ptid[1] = strtoul(strchr(&line[2], ':')+1, NULL, 16);

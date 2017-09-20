@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include "pcap_stat.h"
 
 #define PCAP_MAGIC (0xA1B2C3D4)
 #define GZIP_MAGIC (0x8B1F)
@@ -18,10 +19,13 @@
 #define MIN_PORT_SIP 5060
 #define MAX_PORT_SIP 5070
 
-#define MIN_PORT_SCTP 4300
+#define MIN_PORT_SMPP 2700
+#define MAX_PORT_SMPP 2800
+
+#define MIN_PORT_SCTP 2990
 #define MAX_PORT_SCTP 4400
 
-#define MIN_PORT_DIAM 3800
+#define MIN_PORT_DIAM 2990
 #define MAX_PORT_DIAM 3900
 
 #define SIP_PREFIX_FROM    "FROM: "
@@ -54,6 +58,7 @@
 #define pcap_dbg_cond  		0x004000
 #define pcap_dbg_match 		0x008000
 #define pcap_dbg_cfg 	       	0x010000
+#define pcap_dbg_smpp 	       	0x020000
 
 
 extern unsigned int PCAP_DEBUG;
@@ -75,6 +80,7 @@ struct  TPCAPFile {TPCAPFile *Self;
 		PCAP_header pcap_header; 
 		unsigned char *packet_buf; 
 		size_t buf_size; 
+		Stat_Record stat_record;
 };
 
 typedef struct  TPacket TPacket;
@@ -100,6 +106,8 @@ struct  TPacket {TPacket *Self;
 				  char SessionID[SIP_Field_Length];
 				  char Called[SIP_Field_Length];
 				  char Calling[SIP_Field_Length];
+				  char _temp_buffer[IMSI_FIELD_LENGTH];
+				  unsigned char _subs_type;
 				} DIAMETER;
 			struct { char GT_A[MSISDN_FIELD_LENGTH];
 				 unsigned char SSN_A;
@@ -119,6 +127,11 @@ struct  TPacket {TPacket *Self;
                                  char MSISDN_C[MSISDN_FIELD_LENGTH];
 				 unsigned char OpCode;
 				} CAP;
+			struct { char MSISDN_A[MSISDN_FIELD_LENGTH];
+                                 char MSISDN_B[MSISDN_FIELD_LENGTH];
+				 unsigned int SEQUENCE;
+				 unsigned int MESSAGE_ID;
+				} SMPP;
 			} Fields;
 };
 
@@ -131,7 +144,7 @@ int pcap_read(TPCAPFile *, TPacket *);
 int pcap_write(FILE *, TPacket *);
 FILE *create_pcap(const char *, int);
 
-int pkt_parse(TPacket*, int (*handler)(void *, TPacket *), void *);
+int pkt_parse(TPacket*, int (*handler)(void *, TPacket *, Stat_Record *), void *, Stat_Record *);
 
 void pkt_print(const TPacket *);
 void clear_pkt(TPacket *);

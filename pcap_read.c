@@ -6,7 +6,7 @@
 // todo: more boundary check in packets size
 // todo: statitics
 
-#define PCAP_SCAN_VERSION 0.98.5a
+#define PCAP_SCAN_VERSION "0.98.8"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,6 +16,7 @@
 #include "gsm.h"
 #include "pcap.h"
 #include "cond.h"
+//#include "pcap_stat.h"
 //#define DEBUG
 
 
@@ -25,8 +26,22 @@
 
 int process_file(const char *filename, FILE* outfile, TConditionsList * CList);
 
-struct  {char *outfilename; char *condfilename; TConditionsList *Infiles; TConditionsList *Conditions; int VLAN; int append; int scan_counter; int scan_limit; int learn;} Config;
+struct  {char *outfilename; 
+	char *condfilename; 
+	TConditionsList *Infiles; 
+	TConditionsList *Conditions; 
+	int VLAN; 
+	int append; 
+	int scan_counter; 
+	int scan_limit; 
+	int learn; 
+	int print_stat;
+	int print_ver;
+	int print_cond;
+	} Config;
+
 int packets_written;
+Stat_Record Total_stat_record;
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */ 
 /*  BEGIN                                                    */
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */ 
@@ -39,7 +54,7 @@ int stop, pkt_counter;
 unsigned int tid, ptid[2];
 struct timeval time_stop, time_start, time_diff;
 const char *help_banner = 
-"Version 0.98.5a\npcap_scan  -o <outfile> -i <infile> [-i] <infile> .. -cX <value> [-cX <value>]...[-cX <value>]  \nMandatory:\n -o <outfile>			PCAP file with matched packets\n -i <infile> [<infile>]...	one or more PCAP files to read. Gzip is supported. Note, bash automatically resolve mask to list.\nConditions: (if no conditions specified, take ALL packets with SIP, DIAMETER, MAP, CAP)\n -ci <imsi>\n -cm <msisdn>\n -cg <global title>\n -ct <tid>			(example: a1B2c3D4)\n -tp <tid1>:<tid2>\n -cc <SIP Call-ID>\n -cd <DIAMETER Session-Id>\n -cf <input file with conditions>\nOptions\n -v1  				don't skip VLAN packets\n -r <output file with conditions>\n -a1 				append outfile (if exist) (when -cf specified, -a1 assumed as default)\n -a0 				overwrite outfile\n -w 				scan input files two times (useful for files from STP pair, for example)\nlearn mode (default is -l2)\n -l0 				don't expand condition list during scan\n -l1 				expand condition list during scan only with tid, SessionID, CallID\n -l2 				expand condition list during scan with tid, SessionID, CallID, IMSI, MSISDN called and calling\n -D <debug_key>\n";
+"Version "PCAP_SCAN_VERSION"\npcap_scan  -o <outfile> -i <infile> [-i] <infile> .. -cX <value> [-cX <value>]...[-cX <value>]  \nMandatory:\n -o <outfile>			PCAP file with matched packets\n -i <infile> [<infile>]...	one or more PCAP files to read. Gzip is supported. Note, bash automatically resolve mask to list.\nConditions: (if no conditions specified, take ALL packets with SIP, DIAMETER, MAP, CAP, SMPP)\n -ci <imsi>\n -cm <msisdn>\n -cg <global title>\n -ct <tid>			(example: a1B2c3D4)\n -tp <tid1>:<tid2>\n -cc <SIP Call-ID>\n -cd <DIAMETER Session-Id>\n -cs <SMPP sequence number>\n -cx <SMPP message ID>\n -cf <input file with conditions>\nOptions\n -v1  				don't skip VLAN packets\n -r <output file with conditions>\n -R				print conditions at finish\n -a1 				append outfile (if exist) (when -cf specified, -a1 assumed as default)\n -a0 				overwrite outfile\n -w 				scan input files two times (useful for files from STP pair, for example)\nlearn mode (default is -l2)\n -l0 				don't expand condition list during scan\n -l1 				expand condition list during scan only with tid, SessionID, CallID\n -l2 				expand condition list during scan with tid, SessionID, CallID, IMSI, MSISDN called and calling\nstatistics (-s1 default)\n -s0				don't print statistics\n -s1				print total statistics\n -s2				print statistics for every file\n -V				print program version\n\n -D <debug_key>\n";
 
 gettimeofday(&time_start, NULL);
 
@@ -56,32 +71,42 @@ Config.append  	  = 0;
 Config.learn      = 2;
 Config.scan_limit = 1;
 Config.VLAN	  = 0;
+Config.print_stat = 1;
+Config.print_ver  = 0;
+Config.print_cond = 0;
 
 stop = 0;
 
 pkt_counter = 0;
 packets_written = 0;
+stat_record_init(&Total_stat_record);
 
 if (sizeof(int) != 4) {printf("\nFatal: sizeof(int) not equal 4! change compiler settings!"); exit(0);}
-if (argc < 2) { printf("%s",help_banner);  return(0);};
+if (argc < 2) { printf("%s", help_banner);  return(0);};
 
 for(i = 1; i < argc; i++){
 	switch (argv[i][0]){
 		case '-':  switch(argv[i][1]) {
 				case 'D': PCAP_DEBUG = strtoul(argv[i+1], NULL, 16); printf("\ndebug key:0x%x", PCAP_DEBUG); i++; break;
 				case 'v': Config.VLAN   = atoi(&argv[i][2]); if (PCAP_DEBUG & pcap_dbg_cfg) printf("\ninclude VLANs:%u", Config.VLAN); break;
+				case 'V': Config.print_ver  = 1; if (PCAP_DEBUG & pcap_dbg_cfg) printf("\nprint version:%u", Config.print_ver); break;
+//				case 's': Config.print_stat = 1; if (PCAP_DEBUG & pcap_dbg_cfg) printf("\nprint Stat:%u", Config.print_stat); break;
+				case 's': Config.print_stat = atoi(&argv[i][2]); if (PCAP_DEBUG & pcap_dbg_cfg) printf("\nprint Stat:%u", Config.print_stat); break;
+//				case 'S': Config.print_stat = 0; if (PCAP_DEBUG & pcap_dbg_cfg) printf("\nprint Stat:%u", Config.print_stat); break;
 				case 'a': Config.append = atoi(&argv[i][2]); if (PCAP_DEBUG & pcap_dbg_cfg) printf("\nappend outfile:%u", Config.append); break;
 				case 'l': Config.learn  = atoi(&argv[i][2]); if (PCAP_DEBUG & pcap_dbg_cfg) printf("\nlearn mode:%u", Config.learn); break;
 				case 'w': Config.scan_limit++; 		     if (PCAP_DEBUG & pcap_dbg_cfg) printf("\nscan twice:%u", Config.scan_limit); break;
 				case 'o': Config.outfilename = strcpy(calloc(strlen(argv[i+1])+1, 1), argv[i+1]); i++; break;
 				case 'r': Config.condfilename= strcpy(calloc(strlen(argv[i+1])+1, 1), argv[i+1]); i++; break;
+				case 'R': Config.print_cond = 1; break;
 				case 'i': i++; while( (i < argc) && (argv[i][0] != '-') ) add_U_Condition(Config.Infiles, 'f', argv[i++]);  
 					  i--; break;
 				case 'c': switch(argv[i][2]) { 	   case 'i':  case 'm':  case 'c': case 'g': case 'd':
 										add_U_Condition(Config.Conditions, argv[i][2], argv[i+1]); i++;
 										break;
-			     				           case 't':   	tid = strtoul(argv[i+1], NULL, 16);
-										add_U_Condition(Config.Conditions, 't', &tid); i++;
+			     				           case 't':  case 's': case 'x':
+										tid = strtoul(argv[i+1], NULL, 16);
+										add_U_Condition(Config.Conditions, argv[i][2], &tid); i++;
 										break;
 					   			   case 'p':	ptid[0] = strtoul(argv[i+1], NULL, 16);
 										ptid[1] = strtoul(strchr(argv[i+1], ':')+1, NULL, 16);
@@ -101,7 +126,7 @@ for(i = 1; i < argc; i++){
 		  default:  printf("\nUrecognized argument '%s' ignored", argv[i]); stop = 1; break;
 		} // switch arg
 } // for args
-
+if (Config.print_ver) {printf("\npcap_read %s", PCAP_SCAN_VERSION);}
 Config.Infiles = sort_FileList(Config.Infiles);
 
 if (PCAP_DEBUG & pcap_dbg_cfg)  {printf("\nOutput file:%s", Config.outfilename); printf("\n\nInput files:"); print_ConditionList(Config.Infiles, stdout);}
@@ -123,7 +148,7 @@ for(Config.scan_counter = Config.scan_limit; Config.scan_counter; Config.scan_co
 
 fclose(outfile);
 if ( (!packets_written) && (!Config.append) ) remove(Config.outfilename);
-if (PCAP_DEBUG & pcap_dbg_cond) {printf("\nConditions at finish:"); print_ConditionList(Config.Conditions, stdout);}
+if (PCAP_DEBUG & pcap_dbg_cond) {printf("\ndebug:Conditions at finish:"); print_ConditionList(Config.Conditions, stdout);}
 
 if (Config.condfilename) {
 	condfile = fopen(Config.condfilename, "w");
@@ -131,19 +156,22 @@ if (Config.condfilename) {
 	fclose(condfile);
 	}
 
-done_ConditionsList(Config.Infiles);
-done_ConditionsList(Config.Conditions);
 
 gettimeofday(&time_stop, NULL);
 diff = (time_stop.tv_sec - time_start.tv_sec)*1000000 + (time_stop.tv_usec - time_start.tv_usec);
 
-printf("\nTotal packets:%u time:%u ms, rate:%u Kpkt/sec, written:%u packets.", pkt_counter, diff/1000, 1000*pkt_counter/diff, packets_written);
+if (Config.print_stat > 0) {printf("\ntotal:"); stat_print(&Total_stat_record, stdout);}
+if (Config.print_cond)     {printf("\nfinal conditions list:"); print_ConditionList(Config.Conditions, stdout);}
+
+printf("\nTotal packets:%u time:%u ms, rate:%u Kpkt/sec, written:%u packets.\n", pkt_counter, diff/1000, 1000*pkt_counter/diff, packets_written);
+done_ConditionsList(Config.Infiles);
+done_ConditionsList(Config.Conditions);
 
 } // main
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */ 
 int check_conditions(TConditionsList * CList, TPacket *pkt){
-int j, match;
+int j, match, cl;
 Condition *cond;
 
  for(j = 0, cond = (Condition*)CList->buffer; j < CList->qty; cond = next_Condition(cond), j++) { 
@@ -154,7 +182,10 @@ Condition *cond;
 		if ( (pkt->protocol == pktMAP) || (pkt->protocol == pktCAP) ) switch(cond->type) {
 			case 't': if ( (cond->t1 == pkt->Fields.TCAP.OTID) || (cond->t1 == pkt->Fields.TCAP.DTID)) return 1;
 				break;
-			case 'g': case 'i': case 'm':
+			case 'g': cl = strlen(cond->cvalue);
+				  if ( !strncmp(pkt->Fields.SCCP.GT_A, cond->cvalue, cl)  || !strncmp(pkt->Fields.SCCP.GT_B, cond->cvalue, cl) ) return 1;
+				break;
+			case 'i': case 'm':
 				  if ( strstr(pkt->Fields.SCCP.GT_A, cond->cvalue)  || strstr(pkt->Fields.SCCP.GT_B, cond->cvalue) ) return 1;
 				break;
 			case 'p': if ( pkt->Fields.TCAP.OTID && pkt->Fields.TCAP.DTID && 
@@ -179,6 +210,12 @@ Condition *cond;
 					      if ( cond->type=='i' )  if ( strstr(pkt->Fields.DIAMETER.IMSI,      cond->cvalue)) return 1;
 					      if ( cond->type=='d' )  if (!strcmp(pkt->Fields.DIAMETER.SessionID, cond->cvalue)) return 1;
 		} //DIAMETER
+		if (pkt->protocol == pktSMPP) { 
+					      if ( cond->type=='m' )  if ( strstr(pkt->Fields.SMPP.MSISDN_A,    cond->cvalue) ||
+									   strstr(pkt->Fields.SMPP.MSISDN_B,    cond->cvalue)  ) return 1;
+					      if ( cond->type=='x' )  if ( (pkt->Fields.SMPP.MESSAGE_ID ==      cond->t1))       return 1;
+					      if ( cond->type=='s' )  if ( (pkt->Fields.SMPP.SEQUENCE   ==	cond->t1)) 	 return 1;
+		} //SMPP
 	}// for cond
 return 0;
 } // check conditions
@@ -189,6 +226,12 @@ void add_conditions(TConditionsList * CList, TPacket *pkt) {
 						      add_U_Condition(CList, 'c', pkt->Fields.SIP.CallID);
 				if (Config.learn > 1) add_U_Condition(CList, 'm', pkt->Fields.SIP.From);
 				if (Config.learn > 1) add_U_Condition(CList, 'm', pkt->Fields.SIP.To);
+				}
+	if (pkt->protocol == pktSMPP) {
+						      add_U_Condition(CList, 's', &pkt->Fields.SMPP.SEQUENCE);
+						      add_U_Condition(CList, 'x', &pkt->Fields.SMPP.MESSAGE_ID);
+				if (Config.learn > 1) add_U_Condition(CList, 'm', pkt->Fields.SMPP.MSISDN_A);
+				if (Config.learn > 1) add_U_Condition(CList, 'm', pkt->Fields.SMPP.MSISDN_B);
 				}
 	if (pkt->protocol == pktDIAM) {
 				                      add_U_Condition(CList, 'd', pkt->Fields.DIAMETER.SessionID);
@@ -214,10 +257,21 @@ void add_conditions(TConditionsList * CList, TPacket *pkt) {
 				}
 }// add conditions
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */ 
-int pkt_handler(TConditionsList * CList, TPacket *pkt){
+int pkt_handler(TConditionsList * CList, TPacket *pkt, Stat_Record * stat_record){
  int match;
  match = check_conditions(CList, pkt);
- if (match) add_conditions(CList, pkt);
+ if (match) {
+	 if (pkt->protocol == pktSIP)  {stat_record->sip__stat.match++;} 
+	 if (pkt->protocol == pktSMPP) {stat_record->smpp_stat.match++;} 
+	 if (pkt->protocol == pktDIAM) {stat_record->diam_stat.match++;} 
+	 if (pkt->protocol == pktCAP)  {stat_record->cap__stat.match++;} 
+	 if (pkt->protocol == pktMAP)  {stat_record->map__stat.match++;} 
+	 if (pkt->protocol == pktMAP || pkt->protocol == pktCAP ) {
+					stat_record->tcap_stat.match++;
+					stat_record->sccp_stat.match++;
+					} 
+	 add_conditions(CList, pkt);
+ }
  return match;
 }
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */ 
@@ -238,13 +292,13 @@ PCAP = pcap_open(filename);
 if (!PCAP) return(0);
 
 while (!pcap_endof(PCAP)) {
-cnt++;
 if (pcap_read(PCAP, &pkt)) 
+		cnt++;
 		if (!( !(Config.VLAN) && (pkt.sll == 129))) // skip VLANs if need
 			{
 	if (PCAP_DEBUG & pcap_dbg_pkt)	printf("\n#%u hdr_size:%d prot:%u port:[%d][%d] size:[%d] time:%u", cnt, sizeof(pkt.packet_header),pkt.ip2_protocol, pkt.sport, pkt.dport, pkt.size, pkt.packet_header.ts_sec);
 	if (PCAP_DEBUG & pcap_dbg_cond) print_ConditionList(CList,stdout);
-  	match=pkt_parse(&pkt, (int (*)(void *, struct TPacket *))pkt_handler, CList); 
+  	match = pkt_parse(&pkt, (int (*)(void *, struct TPacket *, Stat_Record *))pkt_handler, CList, &PCAP->stat_record); 
 	// dumb filter mode
  	if (CList->qty==0 && pkt.protocol) {pcap_write(outfile, &pkt);	packets_written++;} 
 
@@ -256,6 +310,8 @@ if (pcap_read(PCAP, &pkt))
 } // while feof PCAP
 
 pcap_free(PCAP);
+if (Config.print_stat > 1) {printf("\nfile:%s",filename); stat_print(&PCAP->stat_record, stdout);}
+stat_record_sum(&Total_stat_record,&PCAP->stat_record);
 return cnt;
 } // process_file
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */ 
