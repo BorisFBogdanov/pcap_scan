@@ -1,0 +1,10 @@
+0.98.8	- SMPP support
+	- TCAP bugfix (workaround for nonstandard ASN undefined length coding)
+	- in Diameter, IMSI=000000000000000 now skipped
+0.98.7	- Diameter S6a/d
+	- Diameter over SCTP
+	- TCAP bugfix
+0.98.5d	- bugfixes, cosmetics
+	- "-sx", "-R", "-V" options
+0.98.5b - "-cg" search match only at begin of string
+	- add stat collection/reporting
